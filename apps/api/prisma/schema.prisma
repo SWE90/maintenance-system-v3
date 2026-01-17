@@ -1,0 +1,472 @@
+// Prisma Schema for Maintenance System V3
+// PostgreSQL Database
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  admin
+  supervisor
+  technician
+  customer
+}
+
+enum UserStatus {
+  active
+  inactive
+  suspended
+}
+
+enum TaskStatus {
+  pending
+  accepted
+  scheduled
+  on_route
+  arrived
+  inspecting
+  repairing
+  waiting_parts
+  completed
+  not_repaired
+  cancelled
+}
+
+enum TaskPriority {
+  low
+  normal
+  high
+  urgent
+}
+
+enum TaskType {
+  installation
+  maintenance
+  repair
+  inspection
+  warranty
+}
+
+enum StageType {
+  pending
+  accepted
+  scheduled
+  dispatched
+  on_route
+  arrived
+  inspecting
+  repairing
+  waiting_parts
+  completed
+  not_repaired
+  cancelled
+}
+
+enum SmsStatus {
+  pending
+  sent
+  delivered
+  failed
+}
+
+enum SmsType {
+  otp
+  tracking_link
+  verification_code
+  notification
+  reminder
+}
+
+enum AuditAction {
+  create
+  update
+  delete
+  login
+  logout
+  transition
+  assign
+  send_sms
+  sync_odoo
+}
+
+// ============================================
+// USERS & AUTH
+// ============================================
+
+model User {
+  id          Int        @id @default(autoincrement())
+  email       String?    @unique
+  phone       String?    @unique
+  password    String?
+  name        String
+  nameAr      String?    @map("name_ar")
+  role        UserRole   @default(customer)
+  status      UserStatus @default(active)
+  employeeId  String?    @map("employee_id")
+  department  String?
+
+  // Customer specific
+  address     String?
+  city        String?
+  district    String?
+  lat         Float?
+  lng         Float?
+
+  // Technician specific
+  specializations String[]
+  isAvailable     Boolean   @default(true) @map("is_available")
+
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  refreshTokens   RefreshToken[]
+  otpCodes        OtpCode[]
+  tasksAsCustomer Task[]         @relation("CustomerTasks")
+  tasksAsTechnician Task[]       @relation("TechnicianTasks")
+  tasksAsSupervisor Task[]       @relation("SupervisorTasks")
+  taskStages      TaskStage[]
+  timeLogs        TimeLog[]
+  locations       TechnicianLocation[]
+  smsLogs         SmsLog[]
+  auditLogs       AuditLog[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+model OtpCode {
+  id        Int      @id @default(autoincrement())
+  userId    Int?     @map("user_id")
+  phone     String
+  code      String
+  attempts  Int      @default(0)
+  expiresAt DateTime @map("expires_at")
+  verifiedAt DateTime? @map("verified_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([phone])
+  @@index([code])
+  @@map("otp_codes")
+}
+
+// ============================================
+// TASKS (TICKETS)
+// ============================================
+
+model Task {
+  id            Int          @id @default(autoincrement())
+  ticketNumber  String       @unique @map("ticket_number")
+  status        TaskStatus   @default(pending)
+  priority      TaskPriority @default(normal)
+  type          TaskType     @default(maintenance)
+
+  // Customer
+  customerId     Int     @map("customer_id")
+  customerName   String  @map("customer_name")
+  customerPhone  String  @map("customer_phone")
+  customerEmail  String? @map("customer_email")
+  customerAddress String @map("customer_address")
+  customerCity   String  @map("customer_city")
+  customerDistrict String? @map("customer_district")
+  customerLat    Float?  @map("customer_lat")
+  customerLng    Float?  @map("customer_lng")
+
+  // Assignment
+  technicianId   Int?    @map("technician_id")
+  supervisorId   Int?    @map("supervisor_id")
+  assignedBy     Int?    @map("assigned_by")
+
+  // Scheduling
+  scheduledDate  DateTime? @map("scheduled_date")
+  scheduledTime  String?   @map("scheduled_time")
+
+  // Product Info
+  productType    String?  @map("product_type")
+  productModel   String?  @map("product_model")
+  productSerial  String?  @map("product_serial")
+  warrantyStatus String?  @map("warranty_status")
+  warrantyExpiry DateTime? @map("warranty_expiry")
+
+  // Issue & Notes
+  issueDescription String  @map("issue_description") @db.Text
+  issueCategory    String? @map("issue_category")
+  inspectionNotes  String? @map("inspection_notes") @db.Text
+  repairNotes      String? @map("repair_notes") @db.Text
+  completionNotes  String? @map("completion_notes") @db.Text
+  internalNotes    String? @map("internal_notes") @db.Text
+  cancellationReason String? @map("cancellation_reason")
+
+  // Parts & Costs
+  partsUsed       String?  @map("parts_used") @db.Text
+  laborCost       Decimal? @map("labor_cost") @db.Decimal(10, 2)
+  partsCost       Decimal? @map("parts_cost") @db.Decimal(10, 2)
+  totalCost       Decimal? @map("total_cost") @db.Decimal(10, 2)
+
+  // Verification
+  verificationCode    String?   @map("verification_code")
+  verificationCodeSentAt DateTime? @map("verification_code_sent_at")
+  verifiedAt          DateTime? @map("verified_at")
+
+  // Tracking
+  trackingToken       String?   @unique @map("tracking_token")
+  trackingTokenExpiresAt DateTime? @map("tracking_token_expires_at")
+
+  // Odoo Integration
+  odooOrderId    Int?      @map("odoo_order_id")
+  odooInvoiceId  Int?      @map("odoo_invoice_id")
+  odooSynced     Boolean   @default(false) @map("odoo_synced")
+  odooSyncedAt   DateTime? @map("odoo_synced_at")
+  odooError      String?   @map("odoo_error")
+
+  // Timestamps
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  acceptedAt   DateTime? @map("accepted_at")
+  scheduledAt  DateTime? @map("scheduled_at")
+  dispatchedAt DateTime? @map("dispatched_at")
+  startedAt    DateTime? @map("started_at")
+  arrivedAt    DateTime? @map("arrived_at")
+  inspectedAt  DateTime? @map("inspected_at")
+  completedAt  DateTime? @map("completed_at")
+  cancelledAt  DateTime? @map("cancelled_at")
+
+  // Relations
+  customer    User @relation("CustomerTasks", fields: [customerId], references: [id])
+  technician  User? @relation("TechnicianTasks", fields: [technicianId], references: [id])
+  supervisor  User? @relation("SupervisorTasks", fields: [supervisorId], references: [id])
+  stages      TaskStage[]
+  timeLogs    TimeLog[]
+  locations   TaskLocation[]
+  smsLogs     SmsLog[]
+  attachments TaskAttachment[]
+  odooJobs    OdooJob[]
+
+  @@index([customerId])
+  @@index([technicianId])
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+  @@index([scheduledDate])
+  @@map("tasks")
+}
+
+model TaskStage {
+  id          Int       @id @default(autoincrement())
+  taskId      Int       @map("task_id")
+  stageType   StageType @map("stage_type")
+  performedBy Int       @map("performed_by")
+  notes       String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [performedBy], references: [id])
+
+  @@index([taskId])
+  @@index([stageType])
+  @@map("task_stages")
+}
+
+model TimeLog {
+  id              Int       @id @default(autoincrement())
+  taskId          Int       @map("task_id")
+  stageType       StageType @map("stage_type")
+  startTime       DateTime  @map("start_time")
+  endTime         DateTime? @map("end_time")
+  durationMinutes Int?      @map("duration_minutes")
+  performedBy     Int       @map("performed_by")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [performedBy], references: [id])
+
+  @@index([taskId])
+  @@index([stageType])
+  @@map("time_logs")
+}
+
+model TaskAttachment {
+  id        Int      @id @default(autoincrement())
+  taskId    Int      @map("task_id")
+  filename  String
+  path      String
+  mimeType  String   @map("mime_type")
+  size      Int
+  category  String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("task_attachments")
+}
+
+// ============================================
+// TRACKING
+// ============================================
+
+model TechnicianLocation {
+  id           Int      @id @default(autoincrement())
+  technicianId Int      @map("technician_id")
+  taskId       Int?     @map("task_id")
+  lat          Float
+  lng          Float
+  accuracy     Float?
+  speed        Float?
+  heading      Float?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  technician User @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+
+  @@index([technicianId])
+  @@index([createdAt])
+  @@map("technician_locations")
+}
+
+model TaskLocation {
+  id        Int      @id @default(autoincrement())
+  taskId    Int      @map("task_id")
+  stageType StageType @map("stage_type")
+  lat       Float
+  lng       Float
+  accuracy  Float?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("task_locations")
+}
+
+// ============================================
+// SMS
+// ============================================
+
+model SmsLog {
+  id         Int       @id @default(autoincrement())
+  taskId     Int?      @map("task_id")
+  userId     Int?      @map("user_id")
+  phone      String
+  message    String    @db.Text
+  type       SmsType
+  status     SmsStatus @default(pending)
+  provider   String?
+  providerId String?   @map("provider_id")
+  errorMessage String? @map("error_message")
+  sentAt     DateTime? @map("sent_at")
+  deliveredAt DateTime? @map("delivered_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  task Task? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([taskId])
+  @@index([phone])
+  @@index([status])
+  @@map("sms_logs")
+}
+
+// ============================================
+// ODOO INTEGRATION
+// ============================================
+
+model OdooJob {
+  id          Int      @id @default(autoincrement())
+  taskId      Int      @map("task_id")
+  action      String
+  payload     Json?
+  status      String   @default("pending")
+  attempts    Int      @default(0)
+  maxAttempts Int      @default(3) @map("max_attempts")
+  error       String?  @db.Text
+  processedAt DateTime? @map("processed_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([status])
+  @@map("odoo_jobs")
+}
+
+model OdooSyncLog {
+  id           Int      @id @default(autoincrement())
+  taskId       Int      @map("task_id")
+  action       String
+  odooId       Int?     @map("odoo_id")
+  requestData  Json?    @map("request_data")
+  responseData Json?    @map("response_data")
+  success      Boolean
+  errorMessage String?  @map("error_message")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([taskId])
+  @@index([createdAt])
+  @@map("odoo_sync_logs")
+}
+
+// ============================================
+// AUDIT
+// ============================================
+
+model AuditLog {
+  id          Int         @id @default(autoincrement())
+  userId      Int?        @map("user_id")
+  action      AuditAction
+  entityType  String      @map("entity_type")
+  entityId    Int?        @map("entity_id")
+  oldData     Json?       @map("old_data")
+  newData     Json?       @map("new_data")
+  ipAddress   String?     @map("ip_address")
+  userAgent   String?     @map("user_agent")
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================
+// SYSTEM
+// ============================================
+
+model Setting {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     String   @db.Text
+  type      String   @default("string")
+  group     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
