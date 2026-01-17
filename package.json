@@ -2,6 +2,7 @@
   "name": "maintenance-system-v3",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "npm@10.2.0",
   "description": "Maintenance Management System V3 - Enterprise Grade",
   "author": "SWE90",
   "license": "UNLICENSED",
