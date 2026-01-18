@@ -7,6 +7,7 @@ export enum UserRole {
   SUPERVISOR = 'supervisor',
   TECHNICIAN = 'technician',
   CUSTOMER = 'customer',
+  WORKSHOP = 'workshop',
 }
 
 /**
@@ -38,7 +39,7 @@ export interface IUser {
  */
 export interface IStaffUser extends IUser {
   email: string;
-  role: UserRole.ADMIN | UserRole.SUPERVISOR | UserRole.TECHNICIAN;
+  role: UserRole.ADMIN | UserRole.SUPERVISOR | UserRole.TECHNICIAN | UserRole.WORKSHOP;
   employeeId: string | null;
   department: string | null;
 }

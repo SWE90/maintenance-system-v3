@@ -1,195 +1,468 @@
 /**
- * Task Status Enum - FSM States
+ * Ticket Status Enum - FSM States
  * Defines all possible states in the technician workflow
  */
-export enum TaskStatus {
+export enum TicketStatus {
   // Initial States
-  PENDING = 'pending',           // تذكرة جديدة - بانتظار القبول
-  ACCEPTED = 'accepted',         // تم القبول - بانتظار الجدولة
-  SCHEDULED = 'scheduled',       // تمت الجدولة - بانتظار البدء
+  NEW = 'new',                       // تذكرة جديدة
+  ASSIGNED = 'assigned',             // تم الإسناد
+  SCHEDULED = 'scheduled',           // مجدولة
 
   // In Progress States
-  ON_ROUTE = 'on_route',         // الفني في الطريق
-  ARRIVED = 'arrived',           // الفني وصل
-  INSPECTING = 'inspecting',     // جاري الفحص
-  REPAIRING = 'repairing',       // جاري الإصلاح
-  WAITING_PARTS = 'waiting_parts', // بانتظار قطع الغيار
+  ON_ROUTE = 'on_route',             // في الطريق
+  ARRIVED = 'arrived',               // وصل الموقع
+  INSPECTING = 'inspecting',         // جاري الفحص
+  DIAGNOSED = 'diagnosed',           // تم التشخيص
+  REPAIRING = 'repairing',           // جاري الإصلاح
+  WAITING_PARTS = 'waiting_parts',   // بانتظار قطع الغيار
+
+  // Workshop Flow
+  PICKUP_DEVICE = 'pickup_device',   // سحب الجهاز
+  IN_WORKSHOP = 'in_workshop',       // في الورشة
+  READY_DELIVERY = 'ready_delivery', // جاهز للتسليم
 
   // Terminal States
-  COMPLETED = 'completed',       // تم الإنجاز
-  NOT_REPAIRED = 'not_repaired', // لم يتم الإصلاح
-  CANCELLED = 'cancelled',       // ملغاة
+  COMPLETED = 'completed',           // مكتملة
+  NOT_FIXED = 'not_fixed',           // لم يتم الإصلاح
+  CANCELLED = 'cancelled',           // ملغاة
 }
 
+// Alias for backwards compatibility
+export const TaskStatus = TicketStatus;
+export type TaskStatus = TicketStatus;
+
 /**
- * Task Priority
+ * Priority
  */
-export enum TaskPriority {
+export enum Priority {
   LOW = 'low',
   NORMAL = 'normal',
   HIGH = 'high',
   URGENT = 'urgent',
 }
 
+// Alias
+export const TaskPriority = Priority;
+export type TaskPriority = Priority;
+
 /**
- * Task Type
+ * Device Type
  */
-export enum TaskType {
-  INSTALLATION = 'installation',   // تركيب
-  MAINTENANCE = 'maintenance',     // صيانة
-  REPAIR = 'repair',               // إصلاح
-  INSPECTION = 'inspection',       // فحص
-  WARRANTY = 'warranty',           // ضمان
+export enum DeviceType {
+  AC = 'ac',                         // مكيف
+  WASHER = 'washer',                 // غسالة
+  FRIDGE = 'fridge',                 // ثلاجة
+  OVEN = 'oven',                     // فرن
+  DISHWASHER = 'dishwasher',         // غسالة صحون
+  OTHER = 'other',                   // أخرى
 }
 
 /**
- * Stage Type - للتتبع الزمني
+ * Warranty Status
  */
-export enum StageType {
+export enum WarrantyStatus {
+  YES = 'yes',
+  NO = 'no',
+  UNKNOWN = 'unknown',
+}
+
+/**
+ * Time Slot
+ */
+export enum TimeSlot {
+  MORNING = 'morning',   // 8-12
+  NOON = 'noon',         // 12-17
+  EVENING = 'evening',   // 17-23
+}
+
+/**
+ * Attachment Type
+ */
+export enum AttachmentType {
+  BEFORE_INSPECTION = 'before_inspection',
+  AFTER_REPAIR = 'after_repair',
+  SERIAL_PHOTO = 'serial_photo',
+  INVOICE_PHOTO = 'invoice_photo',
+  PARTS_PHOTO = 'parts_photo',
+  DEVICE_PHOTO = 'device_photo',
+  SIGNATURE = 'signature',
+  OTHER = 'other',
+}
+
+/**
+ * Message Channel
+ */
+export enum MessageChannel {
+  INTERNAL = 'internal',
+  SMS = 'sms',
+  WHATSAPP = 'whatsapp',
+  EMAIL = 'email',
+}
+
+/**
+ * Message Status
+ */
+export enum MessageStatus {
   PENDING = 'pending',
-  ACCEPTED = 'accepted',
-  SCHEDULED = 'scheduled',
-  DISPATCHED = 'dispatched',
-  ON_ROUTE = 'on_route',
-  ARRIVED = 'arrived',
-  INSPECTING = 'inspecting',
-  REPAIRING = 'repairing',
-  WAITING_PARTS = 'waiting_parts',
-  COMPLETED = 'completed',
-  NOT_REPAIRED = 'not_repaired',
+  SENT = 'sent',
+  DELIVERED = 'delivered',
+  READ = 'read',
+  FAILED = 'failed',
+}
+
+/**
+ * Parts Request Status
+ */
+export enum PartsRequestStatus {
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  ORDERED = 'ordered',
+  RECEIVED = 'received',
   CANCELLED = 'cancelled',
+}
+
+/**
+ * Escalation Level
+ */
+export enum EscalationLevel {
+  L1 = 'L1',
+  L2 = 'L2',
+  L3 = 'L3',
+}
+
+/**
+ * Escalation Type
+ */
+export enum EscalationType {
+  ASSIGNMENT_DELAY = 'assignment_delay',
+  SCHEDULE_DELAY = 'schedule_delay',
+  TRIP_DELAY = 'trip_delay',
+  ARRIVAL_DELAY = 'arrival_delay',
+  PARTS_DELAY = 'parts_delay',
+  COMPLETION_DELAY = 'completion_delay',
+  CUSTOMER_COMPLAINT = 'customer_complaint',
+  SLA_BREACH = 'sla_breach',
 }
 
 /**
  * FSM Transition Definition
  */
 export interface IFsmTransition {
-  from: TaskStatus;
-  to: TaskStatus[];
-  requiredRole?: string[];
+  from: TicketStatus;
+  to: TicketStatus[];
+  allowedRoles?: string[];
   requiresTechnician?: boolean;
-  requiresVerification?: boolean;
+  requiresPhotos?: boolean;
   requiresNotes?: boolean;
+  requiresCustomerConfirmation?: boolean;
+  minPhotos?: number;
 }
 
 /**
- * Task Interface
+ * Ticket Interface (matches Prisma schema)
  */
-export interface ITask {
+export interface ITicket {
   id: number;
   ticketNumber: string;
-  status: TaskStatus;
-  priority: TaskPriority;
-  type: TaskType;
+  trackingToken: string;
 
   // Customer Info
   customerId: number;
   customerName: string;
   customerPhone: string;
-  customerAddress: string;
+  customerEmail?: string | null;
   customerCity: string;
-  customerDistrict: string;
-  customerLat: number | null;
-  customerLng: number | null;
+  customerAddress: string;
+  latitude: number;
+  longitude: number;
 
-  // Assignment
-  technicianId: number | null;
-  technicianName: string | null;
-  supervisorId: number | null;
+  // Device Info
+  deviceType: DeviceType;
+  brand: string;
+  model?: string | null;
+  problemDescription: string;
+
+  // Warranty Info
+  warrantyStatus: WarrantyStatus;
+  invoiceNumber?: string | null;
+  serialNumber?: string | null;
 
   // Scheduling
-  scheduledDate: Date | null;
-  scheduledTime: string | null;
+  preferredTimeSlot?: TimeSlot | null;
+  scheduledDate?: Date | null;
+  scheduledTimeSlot?: TimeSlot | null;
 
-  // Product Info
-  productType: string | null;
-  productModel: string | null;
-  productSerial: string | null;
-  warrantyStatus: string | null;
+  // Assignment
+  technicianId?: number | null;
+  technicianName?: string | null;
+  assignedAt?: Date | null;
+  assignedById?: number | null;
 
-  // Work Details
-  issueDescription: string;
-  inspectionNotes: string | null;
-  repairNotes: string | null;
-  completionNotes: string | null;
-  partsUsed: string | null;
+  // Status & Priority
+  status: TicketStatus;
+  priority: Priority;
 
-  // Verification
-  verificationCode: string | null;
-  verificationCodeSentAt: Date | null;
+  // Notes
+  diagnosisNotes?: string | null;
+  repairNotes?: string | null;
+  internalNotes?: string | null;
 
-  // Tracking
-  trackingToken: string | null;
-  trackingTokenExpiresAt: Date | null;
+  // Completion Info
+  completedSuccessfully?: boolean | null;
+  notFixedReasons?: string[];
+  cancellationReason?: string | null;
 
-  // Odoo Integration
-  odooOrderId: number | null;
-  odooSynced: boolean;
-  odooSyncedAt: Date | null;
+  // Customer Confirmation
+  customerSignature?: string | null;
+  customerOtpVerified: boolean;
+  customerRating?: number | null;
+  customerFeedback?: string | null;
 
   // Timestamps
   createdAt: Date;
   updatedAt: Date;
-  acceptedAt: Date | null;
-  scheduledAt: Date | null;
-  startedAt: Date | null;
-  arrivedAt: Date | null;
-  completedAt: Date | null;
+  scheduledSetAt?: Date | null;
+  tripStartedAt?: Date | null;
+  arrivedAt?: Date | null;
+  inspectionStartedAt?: Date | null;
+  diagnosedAt?: Date | null;
+  repairStartedAt?: Date | null;
+  completedAt?: Date | null;
+  cancelledAt?: Date | null;
 }
 
+// Alias for backwards compatibility
+export type ITask = ITicket;
+
 /**
- * Task Stage - لتتبع الأوقات
+ * Ticket Status History Entry
  */
-export interface ITaskStage {
+export interface ITicketStatusHistory {
   id: number;
-  taskId: number;
-  stageType: StageType;
-  performedBy: number;
-  notes: string | null;
+  ticketId: number;
+  fromStatus?: TicketStatus | null;
+  toStatus: TicketStatus;
+  notes?: string | null;
+  actorId?: number | null;
+  actorName: string;
+  actorRole: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  createdAt: Date;
+}
+
+// Alias
+export type ITaskStage = ITicketStatusHistory;
+
+/**
+ * Ticket Attachment
+ */
+export interface ITicketAttachment {
+  id: number;
+  ticketId: number;
+  type: AttachmentType;
+  url: string;
+  filename: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  uploadedById: number;
+  uploadedByName: string;
   createdAt: Date;
 }
 
 /**
- * Time Log - لحساب KPIs
+ * Ticket Message
+ */
+export interface ITicketMessage {
+  id: number;
+  ticketId: number;
+  senderId: number;
+  senderName: string;
+  senderRole: string;
+  content: string;
+  channel: MessageChannel;
+  externalId?: string | null;
+  status: MessageStatus;
+  readAt?: Date | null;
+  createdAt: Date;
+}
+
+/**
+ * Parts Request
+ */
+export interface IPartsRequest {
+  id: number;
+  ticketId: number;
+  partName: string;
+  partNumber?: string | null;
+  quantity: number;
+  notes?: string | null;
+  photos: string[];
+  status: PartsRequestStatus;
+  requestedById: number;
+  requestedByName: string;
+  requestedAt: Date;
+  approvedAt?: Date | null;
+  approvedById?: number | null;
+  orderedAt?: Date | null;
+  receivedAt?: Date | null;
+  cancelledAt?: Date | null;
+  cancellationReason?: string | null;
+}
+
+/**
+ * Escalation
+ */
+export interface IEscalation {
+  id: number;
+  ticketId: number;
+  level: EscalationLevel;
+  type: EscalationType;
+  reason: string;
+  ownerId?: number | null;
+  ownerName?: string | null;
+  isResolved: boolean;
+  resolvedAt?: Date | null;
+  resolvedById?: number | null;
+  resolvedByName?: string | null;
+  resolutionNotes?: string | null;
+  createdAt: Date;
+}
+
+/**
+ * Time Log - for KPI calculation
  */
 export interface ITimeLog {
   id: number;
-  taskId: number;
-  stageType: StageType;
-  startTime: Date;
-  endTime: Date | null;
-  durationMinutes: number | null;
-  performedBy: number;
+  ticketId: number;
+  technicianId?: number | null;
+  stage: TicketStatus;
+  startedAt: Date;
+  endedAt?: Date | null;
+  durationMinutes?: number | null;
 }
 
 /**
- * Task Create DTO
+ * Rating
  */
-export interface ITaskCreate {
+export interface IRating {
+  id: number;
+  ticketId: number;
   customerId: number;
-  type: TaskType;
-  priority?: TaskPriority;
-  issueDescription: string;
-  productType?: string;
-  productModel?: string;
-  productSerial?: string;
-  scheduledDate?: Date;
-  scheduledTime?: string;
+  technicianId?: number | null;
+  score: number;
+  feedback?: string | null;
+  createdAt: Date;
 }
 
 /**
- * Task Transition DTO
+ * Ticket Create DTO (Customer submission)
  */
-export interface ITaskTransition {
-  taskId: number;
-  toStatus: TaskStatus;
+export interface ITicketCreate {
+  // Customer Info
+  customerName: string;
+  customerPhone: string;
+  customerCity: string;
+  customerAddress: string;
+  latitude: number;
+  longitude: number;
+
+  // Device Info
+  deviceType: DeviceType;
+  brand: string;
+  model?: string;
+  problemDescription: string;
+
+  // Scheduling
+  preferredTimeSlot?: TimeSlot;
+
+  // Warranty
+  warrantyStatus: WarrantyStatus;
+  invoiceNumber?: string;
+  serialNumber?: string;
+}
+
+/**
+ * Ticket Transition DTO
+ */
+export interface ITicketTransition {
+  ticketId: number;
+  toStatus: TicketStatus;
   notes?: string;
-  verificationCode?: string;
-  partsUsed?: string;
   location?: {
-    lat: number;
-    lng: number;
+    latitude: number;
+    longitude: number;
   };
+}
+
+/**
+ * Start Inspection DTO
+ */
+export interface IStartInspectionDto {
+  ticketId: number;
+  photos: string[]; // URLs of uploaded photos (min 1)
+  notes?: string;
+  location?: {
+    latitude: number;
+    longitude: number;
+  };
+}
+
+/**
+ * Complete Diagnosis DTO
+ */
+export interface ICompleteDiagnosisDto {
+  ticketId: number;
+  diagnosisNotes: string;
+  checklist?: Record<string, boolean>;
+}
+
+/**
+ * Request Parts DTO
+ */
+export interface IRequestPartsDto {
+  ticketId: number;
+  partName: string;
+  partNumber?: string;
+  quantity?: number;
+  notes?: string;
+  serialPhotos: string[]; // Required min 1
+  additionalPhotos?: string[];
+}
+
+/**
+ * Not Fixed DTO
+ */
+export interface INotFixedDto {
+  ticketId: number;
+  reasons: string[]; // Must have at least 1
+  notes?: string;
+  evidencePhoto?: string;
+}
+
+/**
+ * Pickup Device DTO
+ */
+export interface IPickupDeviceDto {
+  ticketId: number;
+  reason: string;
+  photos?: string[];
+  customerAcknowledged: boolean;
+}
+
+/**
+ * Complete Repair DTO
+ */
+export interface ICompleteRepairDto {
+  ticketId: number;
+  photos: string[]; // Required min 3
+  notes?: string;
+  confirmationType: 'signature' | 'otp';
+  signature?: string; // Base64 if signature
+  otp?: string; // OTP code if otp
+  customerRating?: number;
+  customerFeedback?: string;
 }
 
 /**
@@ -197,9 +470,31 @@ export interface ITaskTransition {
  */
 export interface ITransitionResult {
   success: boolean;
-  task: ITask;
-  previousStatus: TaskStatus;
-  newStatus: TaskStatus;
-  stage: ITaskStage;
+  ticket: ITicket;
+  previousStatus: TicketStatus;
+  newStatus: TicketStatus;
+  historyEntry: ITicketStatusHistory;
   error?: string;
+}
+
+/**
+ * Tracking Response (Public)
+ */
+export interface ITrackingResponse {
+  ticket: {
+    ticketNumber: string;
+    status: TicketStatus;
+    deviceType: DeviceType;
+    brand: string;
+    problemDescription: string;
+    scheduledDate?: Date | null;
+    scheduledTimeSlot?: TimeSlot | null;
+  };
+  timeline: ITicketStatusHistory[];
+  technicianLocation?: {
+    latitude: number;
+    longitude: number;
+    updatedAt: Date;
+  } | null;
+  estimatedArrival?: Date | null;
 }

@@ -11,6 +11,7 @@ import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { TasksModule } from './modules/tasks/tasks.module';
+import { TicketsModule } from './modules/tickets/tickets.module';
 import { TrackingModule } from './modules/tracking/tracking.module';
 import { SmsModule } from './modules/sms/sms.module';
 import { OdooModule } from './modules/odoo/odoo.module';
@@ -80,6 +81,7 @@ import { HealthModule } from './modules/health/health.module';
     AuthModule,
     UsersModule,
     TasksModule,
+    TicketsModule,
     TrackingModule,
     SmsModule,
     OdooModule,

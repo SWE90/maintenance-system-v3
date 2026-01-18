@@ -19,6 +19,7 @@ enum UserRole {
   supervisor
   technician
   customer
+  workshop
 }
 
 enum UserStatus {
@@ -27,48 +28,101 @@ enum UserStatus {
   suspended
 }
 
-enum TaskStatus {
-  pending
-  accepted
+enum TicketStatus {
+  new
+  assigned
   scheduled
   on_route
   arrived
   inspecting
+  diagnosed
   repairing
   waiting_parts
+  pickup_device
+  in_workshop
+  ready_delivery
   completed
-  not_repaired
+  not_fixed
   cancelled
 }
 
-enum TaskPriority {
+enum Priority {
   low
   normal
   high
   urgent
 }
 
-enum TaskType {
-  installation
-  maintenance
-  repair
-  inspection
-  warranty
+enum DeviceType {
+  ac
+  washer
+  fridge
+  oven
+  dishwasher
+  other
 }
 
-enum StageType {
+enum WarrantyStatus {
+  yes
+  no
+  unknown
+}
+
+enum TimeSlot {
+  morning
+  noon
+  evening
+}
+
+enum AttachmentType {
+  before_inspection
+  after_repair
+  serial_photo
+  invoice_photo
+  parts_photo
+  device_photo
+  signature
+  other
+}
+
+enum MessageChannel {
+  internal
+  sms
+  whatsapp
+  email
+}
+
+enum MessageStatus {
   pending
-  accepted
-  scheduled
-  dispatched
-  on_route
-  arrived
-  inspecting
-  repairing
-  waiting_parts
-  completed
-  not_repaired
+  sent
+  delivered
+  read
+  failed
+}
+
+enum PartsRequestStatus {
+  pending
+  approved
+  ordered
+  received
   cancelled
+}
+
+enum EscalationLevel {
+  L1
+  L2
+  L3
+}
+
+enum EscalationType {
+  assignment_delay
+  schedule_delay
+  trip_delay
+  arrival_delay
+  parts_delay
+  completion_delay
+  customer_complaint
+  sla_breach
 }
 
 enum SmsStatus {
@@ -84,6 +138,8 @@ enum SmsType {
   verification_code
   notification
   reminder
+  visit_reminder
+  completion_otp
 }
 
 enum AuditAction {
@@ -94,8 +150,10 @@ enum AuditAction {
   logout
   transition
   assign
+  schedule
   send_sms
-  sync_odoo
+  escalate
+  resolve_escalation
 }
 
 // ============================================
@@ -111,44 +169,59 @@ model User {
   nameAr      String?    @map("name_ar")
   role        UserRole   @default(customer)
   status      UserStatus @default(active)
-  employeeId  String?    @map("employee_id")
+  employeeId  String?    @unique @map("employee_id")
   department  String?
+  avatar      String?
 
-  // Customer specific
+  // Customer specific fields
   address     String?
   city        String?
   district    String?
   lat         Float?
   lng         Float?
 
-  // Technician specific
+  // Technician specific fields
   specializations String[]
-  isAvailable     Boolean   @default(true) @map("is_available")
+  serviceAreas    String[]    @map("service_areas")
+  isAvailable     Boolean     @default(true) @map("is_available")
+  currentLat      Float?      @map("current_lat")
+  currentLng      Float?      @map("current_lng")
+  lastLocationAt  DateTime?   @map("last_location_at")
 
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
+  deletedAt   DateTime?  @map("deleted_at")
 
   // Relations
-  refreshTokens   RefreshToken[]
-  otpCodes        OtpCode[]
-  tasksAsCustomer Task[]         @relation("CustomerTasks")
-  tasksAsTechnician Task[]       @relation("TechnicianTasks")
-  tasksAsSupervisor Task[]       @relation("SupervisorTasks")
-  taskStages      TaskStage[]
-  timeLogs        TimeLog[]
-  locations       TechnicianLocation[]
-  smsLogs         SmsLog[]
-  auditLogs       AuditLog[]
+  refreshTokens     RefreshToken[]
+  otpCodes          OtpCode[]
+  ticketsAsCustomer Ticket[]       @relation("CustomerTickets")
+  ticketsAsTechnician Ticket[]     @relation("TechnicianTickets")
+  ticketsAssignedBy Ticket[]       @relation("AssignedByUser")
+  ticketsCreatedBy  Ticket[]       @relation("CreatedByUser")
+  statusHistoryActor TicketStatusHistory[] @relation("StatusHistoryActor")
+  timeLogs          TimeLog[]
+  locations         TechnicianLocation[]
+  smsLogs           SmsLog[]
+  auditLogs         AuditLog[]
+  messagesAsSender  TicketMessage[] @relation("MessageSender")
+  partsRequestsBy   PartsRequest[] @relation("PartsRequestedBy")
+  escalationsOwner  Escalation[] @relation("EscalationOwner")
+  escalationsResolved Escalation[] @relation("EscalationResolvedBy")
+  ratingsGiven      Rating[]
 
+  @@index([role])
+  @@index([status])
+  @@index([city])
   @@map("users")
 }
 
 model RefreshToken {
-  id        Int      @id @default(autoincrement())
-  userId    Int      @map("user_id")
-  token     String   @unique
-  expiresAt DateTime @map("expires_at")
-  createdAt DateTime @default(now()) @map("created_at")
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  token     String    @unique
+  expiresAt DateTime  @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
   revokedAt DateTime? @map("revoked_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -159,182 +232,298 @@ model RefreshToken {
 }
 
 model OtpCode {
-  id        Int      @id @default(autoincrement())
-  userId    Int?     @map("user_id")
-  phone     String
-  code      String
-  attempts  Int      @default(0)
-  expiresAt DateTime @map("expires_at")
+  id         Int       @id @default(autoincrement())
+  userId     Int?      @map("user_id")
+  phone      String
+  code       String
+  type       String    @default("login")
+  attempts   Int       @default(0)
+  maxAttempts Int      @default(3) @map("max_attempts")
+  expiresAt  DateTime  @map("expires_at")
   verifiedAt DateTime? @map("verified_at")
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
 
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([phone])
   @@index([code])
+  @@index([type])
   @@map("otp_codes")
 }
 
 // ============================================
-// TASKS (TICKETS)
+// TICKETS
 // ============================================
 
-model Task {
-  id            Int          @id @default(autoincrement())
-  ticketNumber  String       @unique @map("ticket_number")
-  status        TaskStatus   @default(pending)
-  priority      TaskPriority @default(normal)
-  type          TaskType     @default(maintenance)
+model Ticket {
+  id              Int          @id @default(autoincrement())
+  ticketNumber    String       @unique @map("ticket_number")
+  trackingToken   String       @unique @map("tracking_token")
 
-  // Customer
-  customerId     Int     @map("customer_id")
-  customerName   String  @map("customer_name")
-  customerPhone  String  @map("customer_phone")
-  customerEmail  String? @map("customer_email")
-  customerAddress String @map("customer_address")
-  customerCity   String  @map("customer_city")
-  customerDistrict String? @map("customer_district")
-  customerLat    Float?  @map("customer_lat")
-  customerLng    Float?  @map("customer_lng")
+  // Customer Info (denormalized for quick access)
+  customerId      Int          @map("customer_id")
+  customerName    String       @map("customer_name")
+  customerPhone   String       @map("customer_phone")
+  customerEmail   String?      @map("customer_email")
+  customerCity    String       @map("customer_city")
+  customerAddress String       @map("customer_address") @db.Text
+  latitude        Float
+  longitude       Float
 
-  // Assignment
-  technicianId   Int?    @map("technician_id")
-  supervisorId   Int?    @map("supervisor_id")
-  assignedBy     Int?    @map("assigned_by")
+  // Device Info
+  deviceType         DeviceType
+  brand              String
+  model              String?
+  problemDescription String     @map("problem_description") @db.Text
+
+  // Warranty Info
+  warrantyStatus  WarrantyStatus @default(unknown) @map("warranty_status")
+  invoiceNumber   String?        @map("invoice_number")
+  serialNumber    String?        @map("serial_number")
 
   // Scheduling
-  scheduledDate  DateTime? @map("scheduled_date")
-  scheduledTime  String?   @map("scheduled_time")
+  preferredTimeSlot   TimeSlot?    @map("preferred_time_slot")
+  scheduledDate       DateTime?    @map("scheduled_date")
+  scheduledTimeSlot   TimeSlot?    @map("scheduled_time_slot")
 
-  // Product Info
-  productType    String?  @map("product_type")
-  productModel   String?  @map("product_model")
-  productSerial  String?  @map("product_serial")
-  warrantyStatus String?  @map("warranty_status")
-  warrantyExpiry DateTime? @map("warranty_expiry")
+  // Assignment
+  technicianId   Int?      @map("technician_id")
+  assignedAt     DateTime? @map("assigned_at")
+  assignedById   Int?      @map("assigned_by_id")
 
-  // Issue & Notes
-  issueDescription String  @map("issue_description") @db.Text
-  issueCategory    String? @map("issue_category")
-  inspectionNotes  String? @map("inspection_notes") @db.Text
-  repairNotes      String? @map("repair_notes") @db.Text
-  completionNotes  String? @map("completion_notes") @db.Text
-  internalNotes    String? @map("internal_notes") @db.Text
-  cancellationReason String? @map("cancellation_reason")
+  // Status & Priority
+  status         TicketStatus @default(new)
+  priority       Priority     @default(normal)
 
-  // Parts & Costs
-  partsUsed       String?  @map("parts_used") @db.Text
-  laborCost       Decimal? @map("labor_cost") @db.Decimal(10, 2)
-  partsCost       Decimal? @map("parts_cost") @db.Decimal(10, 2)
-  totalCost       Decimal? @map("total_cost") @db.Decimal(10, 2)
+  // Diagnosis & Repair Notes
+  diagnosisNotes    String?   @map("diagnosis_notes") @db.Text
+  repairNotes       String?   @map("repair_notes") @db.Text
+  internalNotes     String?   @map("internal_notes") @db.Text
 
-  // Verification
-  verificationCode    String?   @map("verification_code")
-  verificationCodeSentAt DateTime? @map("verification_code_sent_at")
-  verifiedAt          DateTime? @map("verified_at")
+  // Completion Info
+  completedSuccessfully Boolean?  @map("completed_successfully")
+  notFixedReasons       String[]  @map("not_fixed_reasons")
+  cancellationReason    String?   @map("cancellation_reason")
 
-  // Tracking
-  trackingToken       String?   @unique @map("tracking_token")
-  trackingTokenExpiresAt DateTime? @map("tracking_token_expires_at")
-
-  // Odoo Integration
-  odooOrderId    Int?      @map("odoo_order_id")
-  odooInvoiceId  Int?      @map("odoo_invoice_id")
-  odooSynced     Boolean   @default(false) @map("odoo_synced")
-  odooSyncedAt   DateTime? @map("odoo_synced_at")
-  odooError      String?   @map("odoo_error")
+  // Customer Confirmation
+  customerSignature    String?   @map("customer_signature") @db.Text
+  customerOtpVerified  Boolean   @default(false) @map("customer_otp_verified")
+  customerRating       Int?      @map("customer_rating")
+  customerFeedback     String?   @map("customer_feedback") @db.Text
 
   // Timestamps
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
-  acceptedAt   DateTime? @map("accepted_at")
-  scheduledAt  DateTime? @map("scheduled_at")
-  dispatchedAt DateTime? @map("dispatched_at")
-  startedAt    DateTime? @map("started_at")
-  arrivedAt    DateTime? @map("arrived_at")
-  inspectedAt  DateTime? @map("inspected_at")
-  completedAt  DateTime? @map("completed_at")
-  cancelledAt  DateTime? @map("cancelled_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  scheduledSetAt     DateTime? @map("scheduled_set_at")
+  tripStartedAt      DateTime? @map("trip_started_at")
+  arrivedAt          DateTime? @map("arrived_at")
+  inspectionStartedAt DateTime? @map("inspection_started_at")
+  diagnosedAt        DateTime? @map("diagnosed_at")
+  repairStartedAt    DateTime? @map("repair_started_at")
+  completedAt        DateTime? @map("completed_at")
+  cancelledAt        DateTime? @map("cancelled_at")
+
+  // Created By (could be customer, admin, or system)
+  createdById    Int?      @map("created_by_id")
 
   // Relations
-  customer    User @relation("CustomerTasks", fields: [customerId], references: [id])
-  technician  User? @relation("TechnicianTasks", fields: [technicianId], references: [id])
-  supervisor  User? @relation("SupervisorTasks", fields: [supervisorId], references: [id])
-  stages      TaskStage[]
-  timeLogs    TimeLog[]
-  locations   TaskLocation[]
-  smsLogs     SmsLog[]
-  attachments TaskAttachment[]
-  odooJobs    OdooJob[]
+  customer        User @relation("CustomerTickets", fields: [customerId], references: [id])
+  technician      User? @relation("TechnicianTickets", fields: [technicianId], references: [id])
+  assignedBy      User? @relation("AssignedByUser", fields: [assignedById], references: [id])
+  createdBy       User? @relation("CreatedByUser", fields: [createdById], references: [id])
+  statusHistory   TicketStatusHistory[]
+  attachments     TicketAttachment[]
+  messages        TicketMessage[]
+  partsRequests   PartsRequest[]
+  escalations     Escalation[]
+  timeLogs        TimeLog[]
+  locations       TicketLocation[]
+  smsLogs         SmsLog[]
+  ratings         Rating[]
 
   @@index([customerId])
   @@index([technicianId])
   @@index([status])
   @@index([priority])
+  @@index([customerCity])
+  @@index([deviceType])
   @@index([createdAt])
   @@index([scheduledDate])
-  @@map("tasks")
-}
-
-model TaskStage {
-  id          Int       @id @default(autoincrement())
-  taskId      Int       @map("task_id")
-  stageType   StageType @map("stage_type")
-  performedBy Int       @map("performed_by")
-  notes       String?   @db.Text
-  createdAt   DateTime  @default(now()) @map("created_at")
-
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [performedBy], references: [id])
-
-  @@index([taskId])
-  @@index([stageType])
-  @@map("task_stages")
-}
-
-model TimeLog {
-  id              Int       @id @default(autoincrement())
-  taskId          Int       @map("task_id")
-  stageType       StageType @map("stage_type")
-  startTime       DateTime  @map("start_time")
-  endTime         DateTime? @map("end_time")
-  durationMinutes Int?      @map("duration_minutes")
-  performedBy     Int       @map("performed_by")
-
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [performedBy], references: [id])
-
-  @@index([taskId])
-  @@index([stageType])
-  @@map("time_logs")
-}
-
-model TaskAttachment {
-  id        Int      @id @default(autoincrement())
-  taskId    Int      @map("task_id")
-  filename  String
-  path      String
-  mimeType  String   @map("mime_type")
-  size      Int
-  category  String?
-  createdAt DateTime @default(now()) @map("created_at")
-
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-
-  @@index([taskId])
-  @@map("task_attachments")
+  @@index([trackingToken])
+  @@map("tickets")
 }
 
 // ============================================
-// TRACKING
+// TICKET STATUS HISTORY (Timeline)
+// ============================================
+
+model TicketStatusHistory {
+  id          Int           @id @default(autoincrement())
+  ticketId    Int           @map("ticket_id")
+  fromStatus  TicketStatus? @map("from_status")
+  toStatus    TicketStatus  @map("to_status")
+  notes       String?       @db.Text
+  actorId     Int?          @map("actor_id")
+  actorName   String        @map("actor_name")
+  actorRole   UserRole      @map("actor_role")
+  latitude    Float?
+  longitude   Float?
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actor  User?  @relation("StatusHistoryActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId])
+  @@index([toStatus])
+  @@index([createdAt])
+  @@map("ticket_status_history")
+}
+
+// ============================================
+// ATTACHMENTS
+// ============================================
+
+model TicketAttachment {
+  id              Int            @id @default(autoincrement())
+  ticketId        Int            @map("ticket_id")
+  type            AttachmentType
+  url             String
+  filename        String
+  originalName    String         @map("original_name")
+  mimeType        String         @map("mime_type")
+  size            Int
+  uploadedById    Int            @map("uploaded_by_id")
+  uploadedByName  String         @map("uploaded_by_name")
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([type])
+  @@map("ticket_attachments")
+}
+
+// ============================================
+// MESSAGES / COMMUNICATION
+// ============================================
+
+model TicketMessage {
+  id          Int           @id @default(autoincrement())
+  ticketId    Int           @map("ticket_id")
+  senderId    Int           @map("sender_id")
+  senderName  String        @map("sender_name")
+  senderRole  UserRole      @map("sender_role")
+  content     String        @db.Text
+  channel     MessageChannel @default(internal)
+  externalId  String?       @map("external_id")
+  status      MessageStatus @default(sent)
+  readAt      DateTime?     @map("read_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender User   @relation("MessageSender", fields: [senderId], references: [id])
+
+  @@index([ticketId])
+  @@index([senderId])
+  @@index([channel])
+  @@map("ticket_messages")
+}
+
+// ============================================
+// SPARE PARTS REQUESTS
+// ============================================
+
+model PartsRequest {
+  id              Int                @id @default(autoincrement())
+  ticketId        Int                @map("ticket_id")
+  partName        String             @map("part_name")
+  partNumber      String?            @map("part_number")
+  quantity        Int                @default(1)
+  notes           String?            @db.Text
+  photos          String[]
+  status          PartsRequestStatus @default(pending)
+  requestedById   Int                @map("requested_by_id")
+  requestedByName String             @map("requested_by_name")
+  requestedAt     DateTime           @default(now()) @map("requested_at")
+  approvedAt      DateTime?          @map("approved_at")
+  approvedById    Int?               @map("approved_by_id")
+  orderedAt       DateTime?          @map("ordered_at")
+  receivedAt      DateTime?          @map("received_at")
+  cancelledAt     DateTime?          @map("cancelled_at")
+  cancellationReason String?         @map("cancellation_reason")
+
+  ticket      Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  requestedBy User   @relation("PartsRequestedBy", fields: [requestedById], references: [id])
+
+  @@index([ticketId])
+  @@index([status])
+  @@index([requestedAt])
+  @@map("parts_requests")
+}
+
+// ============================================
+// ESCALATIONS
+// ============================================
+
+model Escalation {
+  id              Int              @id @default(autoincrement())
+  ticketId        Int              @map("ticket_id")
+  level           EscalationLevel
+  type            EscalationType
+  reason          String           @db.Text
+  ownerId         Int?             @map("owner_id")
+  ownerName       String?          @map("owner_name")
+  isResolved      Boolean          @default(false) @map("is_resolved")
+  resolvedAt      DateTime?        @map("resolved_at")
+  resolvedById    Int?             @map("resolved_by_id")
+  resolvedByName  String?          @map("resolved_by_name")
+  resolutionNotes String?          @map("resolution_notes") @db.Text
+  createdAt       DateTime         @default(now()) @map("created_at")
+
+  ticket     Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  owner      User?  @relation("EscalationOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  resolvedBy User?  @relation("EscalationResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([ticketId])
+  @@index([isResolved])
+  @@index([level])
+  @@index([type])
+  @@index([createdAt])
+  @@map("escalations")
+}
+
+// ============================================
+// TIME TRACKING
+// ============================================
+
+model TimeLog {
+  id              Int          @id @default(autoincrement())
+  ticketId        Int          @map("ticket_id")
+  technicianId    Int?         @map("technician_id")
+  stage           TicketStatus
+  startedAt       DateTime     @default(now()) @map("started_at")
+  endedAt         DateTime?    @map("ended_at")
+  durationMinutes Int?         @map("duration_minutes")
+
+  ticket     Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  technician User?  @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId])
+  @@index([technicianId])
+  @@index([stage])
+  @@map("time_logs")
+}
+
+// ============================================
+// LOCATION TRACKING
 // ============================================
 
 model TechnicianLocation {
   id           Int      @id @default(autoincrement())
   technicianId Int      @map("technician_id")
-  taskId       Int?     @map("task_id")
-  lat          Float
-  lng          Float
+  ticketId     Int?     @map("ticket_id")
+  latitude     Float
+  longitude    Float
   accuracy     Float?
   speed        Float?
   heading      Float?
@@ -343,95 +532,101 @@ model TechnicianLocation {
   technician User @relation(fields: [technicianId], references: [id], onDelete: Cascade)
 
   @@index([technicianId])
+  @@index([ticketId])
   @@index([createdAt])
   @@map("technician_locations")
 }
 
-model TaskLocation {
-  id        Int      @id @default(autoincrement())
-  taskId    Int      @map("task_id")
-  stageType StageType @map("stage_type")
-  lat       Float
-  lng       Float
-  accuracy  Float?
-  createdAt DateTime @default(now()) @map("created_at")
+model TicketLocation {
+  id        Int          @id @default(autoincrement())
+  ticketId  Int          @map("ticket_id")
+  status    TicketStatus
+  latitude  Float
+  longitude Float
+  address   String?
+  createdAt DateTime     @default(now()) @map("created_at")
 
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
-  @@index([taskId])
-  @@map("task_locations")
+  @@index([ticketId])
+  @@index([status])
+  @@map("ticket_locations")
 }
 
 // ============================================
-// SMS
+// RATINGS
+// ============================================
+
+model Rating {
+  id           Int      @id @default(autoincrement())
+  ticketId     Int      @map("ticket_id")
+  customerId   Int      @map("customer_id")
+  technicianId Int?     @map("technician_id")
+  score        Int      // 1-5
+  feedback     String?  @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  customer User   @relation(fields: [customerId], references: [id])
+
+  @@unique([ticketId])
+  @@index([customerId])
+  @@index([technicianId])
+  @@index([score])
+  @@map("ratings")
+}
+
+// ============================================
+// SLA CONFIGURATION
+// ============================================
+
+model SlaConfig {
+  id               Int             @id @default(autoincrement())
+  name             String          @unique
+  nameAr           String?         @map("name_ar")
+  type             EscalationType
+  thresholdMinutes Int             @map("threshold_minutes")
+  escalationLevel  EscalationLevel @map("escalation_level")
+  isActive         Boolean         @default(true) @map("is_active")
+  description      String?         @db.Text
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  @@map("sla_configs")
+}
+
+// ============================================
+// SMS LOGS
 // ============================================
 
 model SmsLog {
-  id         Int       @id @default(autoincrement())
-  taskId     Int?      @map("task_id")
-  userId     Int?      @map("user_id")
-  phone      String
-  message    String    @db.Text
-  type       SmsType
-  status     SmsStatus @default(pending)
-  provider   String?
-  providerId String?   @map("provider_id")
-  errorMessage String? @map("error_message")
-  sentAt     DateTime? @map("sent_at")
-  deliveredAt DateTime? @map("delivered_at")
-  createdAt  DateTime  @default(now()) @map("created_at")
+  id           Int       @id @default(autoincrement())
+  ticketId     Int?      @map("ticket_id")
+  userId       Int?      @map("user_id")
+  phone        String
+  message      String    @db.Text
+  type         SmsType
+  status       SmsStatus @default(pending)
+  provider     String?
+  providerId   String?   @map("provider_id")
+  errorMessage String?   @map("error_message")
+  sentAt       DateTime? @map("sent_at")
+  deliveredAt  DateTime? @map("delivered_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
 
-  task Task? @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  @@index([taskId])
+  @@index([ticketId])
+  @@index([userId])
   @@index([phone])
   @@index([status])
+  @@index([type])
   @@map("sms_logs")
 }
 
 // ============================================
-// ODOO INTEGRATION
-// ============================================
-
-model OdooJob {
-  id          Int      @id @default(autoincrement())
-  taskId      Int      @map("task_id")
-  action      String
-  payload     Json?
-  status      String   @default("pending")
-  attempts    Int      @default(0)
-  maxAttempts Int      @default(3) @map("max_attempts")
-  error       String?  @db.Text
-  processedAt DateTime? @map("processed_at")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-
-  @@index([taskId])
-  @@index([status])
-  @@map("odoo_jobs")
-}
-
-model OdooSyncLog {
-  id           Int      @id @default(autoincrement())
-  taskId       Int      @map("task_id")
-  action       String
-  odooId       Int?     @map("odoo_id")
-  requestData  Json?    @map("request_data")
-  responseData Json?    @map("response_data")
-  success      Boolean
-  errorMessage String?  @map("error_message")
-  createdAt    DateTime @default(now()) @map("created_at")
-
-  @@index([taskId])
-  @@index([createdAt])
-  @@map("odoo_sync_logs")
-}
-
-// ============================================
-// AUDIT
+// AUDIT LOGS
 // ============================================
 
 model AuditLog {
@@ -456,17 +651,38 @@ model AuditLog {
 }
 
 // ============================================
-// SYSTEM
+// SYSTEM SETTINGS
 // ============================================
 
 model Setting {
-  id        Int      @id @default(autoincrement())
-  key       String   @unique
-  value     String   @db.Text
-  type      String   @default("string")
-  group     String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id          Int      @id @default(autoincrement())
+  key         String   @unique
+  value       String   @db.Text
+  type        String   @default("string")
+  group       String?
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
+  @@index([group])
   @@map("settings")
+}
+
+// ============================================
+// CITIES (for dropdowns)
+// ============================================
+
+model City {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  nameEn    String   @map("name_en")
+  nameAr    String   @map("name_ar")
+  region    String?
+  isActive  Boolean  @default(true) @map("is_active")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([isActive])
+  @@index([sortOrder])
+  @@map("cities")
 }
