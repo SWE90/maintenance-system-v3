@@ -5,18 +5,12 @@ import { BullModule } from '@nestjs/bullmq';
 
 // Core modules
 import { PrismaModule } from './prisma/prisma.module';
-import { RedisModule } from './redis/redis.module';
 
 // Feature modules
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
-import { TasksModule } from './modules/tasks/tasks.module';
 import { TicketsModule } from './modules/tickets/tickets.module';
-import { TrackingModule } from './modules/tracking/tracking.module';
 import { SmsModule } from './modules/sms/sms.module';
-import { OdooModule } from './modules/odoo/odoo.module';
-import { AuditModule } from './modules/audit/audit.module';
-import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -75,18 +69,12 @@ import { HealthModule } from './modules/health/health.module';
 
     // Core modules
     PrismaModule,
-    RedisModule,
 
     // Feature modules
     AuthModule,
     UsersModule,
-    TasksModule,
     TicketsModule,
-    TrackingModule,
     SmsModule,
-    OdooModule,
-    AuditModule,
-    HealthModule,
   ],
 })
 export class AppModule {}

@@ -343,6 +343,7 @@ model Ticket {
 
   @@index([customerId])
   @@index([technicianId])
+  @@index([assignedById])
   @@index([status])
   @@index([priority])
   @@index([customerCity])
@@ -374,6 +375,7 @@ model TicketStatusHistory {
   actor  User?  @relation("StatusHistoryActor", fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([ticketId])
+  @@index([actorId])
   @@index([toStatus])
   @@index([createdAt])
   @@map("ticket_status_history")
@@ -399,6 +401,7 @@ model TicketAttachment {
   ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@index([ticketId])
+  @@index([uploadedById])
   @@index([type])
   @@map("ticket_attachments")
 }
@@ -456,6 +459,7 @@ model PartsRequest {
   requestedBy User   @relation("PartsRequestedBy", fields: [requestedById], references: [id])
 
   @@index([ticketId])
+  @@index([approvedById])
   @@index([status])
   @@index([requestedAt])
   @@map("parts_requests")

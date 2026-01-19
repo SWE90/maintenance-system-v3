@@ -5,7 +5,6 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
-import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -19,6 +18,14 @@ async function bootstrap() {
 
   // Global prefix
   app.setGlobalPrefix(apiPrefix);
+
+  // Route aliases for backward compatibility
+  // Map /tasks to /tickets
+  const ticketsRouter = app.getHttpAdapter().getInstance()._router;
+  app.use('/api/v1/tasks*', (req: any, res: any, next: any) => {
+    req.url = req.url.replace('/tasks', '/tickets');
+    next();
+  });
 
   // API Versioning
   app.enableVersioning({
@@ -51,7 +58,6 @@ async function bootstrap() {
 
   // Global interceptors
   app.useGlobalInterceptors(
-    new LoggingInterceptor(),
     new TransformInterceptor(),
   );
 
