@@ -457,6 +457,7 @@ model PartsRequest {
 
   ticket      Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   requestedBy User   @relation("PartsRequestedBy", fields: [requestedById], references: [id])
+  items       SparePartRequestItem[]
 
   @@index([ticketId])
   @@index([approvedById])
@@ -689,4 +690,248 @@ model City {
   @@index([isActive])
   @@index([sortOrder])
   @@map("cities")
+}
+
+// ============================================
+// SPARE PARTS MANAGEMENT
+// ============================================
+
+model SparePartCategory {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique
+  nameEn      String   @map("name_en")
+  nameAr      String   @map("name_ar")
+  description String?  @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  spareParts SparePart[]
+
+  @@index([isActive])
+  @@map("spare_part_categories")
+}
+
+model Supplier {
+  id            Int      @id @default(autoincrement())
+  code          String   @unique
+  nameEn        String   @map("name_en")
+  nameAr        String   @map("name_ar")
+  contactPerson String?  @map("contact_person")
+  phone         String?
+  email         String?
+  address       String?  @db.Text
+  city          String?
+  taxNumber     String?  @unique @map("tax_number")
+  paymentTerms  String?  @map("payment_terms")
+  notes         String?  @db.Text
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  spareParts SparePart[]
+
+  @@index([isActive])
+  @@index([city])
+  @@map("suppliers")
+}
+
+model SparePart {
+  id                Int                @id @default(autoincrement())
+  code              String             @unique
+  nameEn            String             @map("name_en")
+  nameAr            String             @map("name_ar")
+  categoryId        Int                @map("category_id")
+  supplierId        Int?               @map("supplier_id")
+  description       String?            @db.Text
+  unitPrice         Decimal            @map("unit_price") @db.Decimal(10, 2)
+  quantity          Int                @default(0)
+  minQuantity       Int                @default(0) @map("min_quantity")
+  maxQuantity       Int?               @map("max_quantity")
+  unit              String             @default("piece")
+  compatibleModels  String[]           @map("compatible_models")
+  warrantyMonths    Int?               @map("warranty_months")
+  imageUrl          String?            @map("image_url")
+  isActive          Boolean            @default(true) @map("is_active")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  category            SparePartCategory @relation(fields: [categoryId], references: [id])
+  supplier            Supplier?         @relation(fields: [supplierId], references: [id])
+  partsRequestItems   SparePartRequestItem[]
+
+  @@index([categoryId])
+  @@index([supplierId])
+  @@index([isActive])
+  @@index([quantity])
+  @@map("spare_parts")
+}
+
+model SparePartRequestItem {
+  id               Int      @id @default(autoincrement())
+  partsRequestId   Int      @map("parts_request_id")
+  sparePartId      Int      @map("spare_part_id")
+  quantity         Int
+  unitPrice        Decimal  @map("unit_price") @db.Decimal(10, 2)
+  totalPrice       Decimal  @map("total_price") @db.Decimal(10, 2)
+  notes            String?  @db.Text
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  partsRequest PartsRequest @relation(fields: [partsRequestId], references: [id], onDelete: Cascade)
+  sparePart    SparePart    @relation(fields: [sparePartId], references: [id])
+
+  @@index([partsRequestId])
+  @@index([sparePartId])
+  @@map("spare_part_request_items")
+}
+
+// ============================================
+// APPOINTMENTS
+// ============================================
+
+model Appointment {
+  id                Int       @id @default(autoincrement())
+  ticketId          Int       @map("ticket_id")
+  technicianId      Int       @map("technician_id")
+  customerId        Int       @map("customer_id")
+  scheduledDate     DateTime  @map("scheduled_date")
+  scheduledTimeSlot TimeSlot  @map("scheduled_time_slot")
+  startTime         DateTime? @map("start_time")
+  endTime           DateTime? @map("end_time")
+  status            String    @default("scheduled") // scheduled, in_progress, completed, cancelled, no_show
+  notes             String?   @db.Text
+  cancellationReason String?  @map("cancellation_reason")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@index([ticketId])
+  @@index([technicianId])
+  @@index([customerId])
+  @@index([scheduledDate])
+  @@index([status])
+  @@map("appointments")
+}
+
+// ============================================
+// REPAIR COSTS
+// ============================================
+
+model RepairCost {
+  id              Int      @id @default(autoincrement())
+  ticketId        Int      @map("ticket_id")
+  itemType        String   @map("item_type") // labor, part, material, transportation, other
+  description     String   @db.Text
+  quantity        Decimal  @db.Decimal(10, 2)
+  unitPrice       Decimal  @map("unit_price") @db.Decimal(10, 2)
+  totalPrice      Decimal  @map("total_price") @db.Decimal(10, 2)
+  isBillable      Boolean  @default(true) @map("is_billable")
+  isWarranty      Boolean  @default(false) @map("is_warranty")
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([ticketId])
+  @@index([itemType])
+  @@index([isBillable])
+  @@map("repair_costs")
+}
+
+// ============================================
+// WORKSHOPS (External Service Providers)
+// ============================================
+
+model Workshop {
+  id            Int      @id @default(autoincrement())
+  code          String   @unique
+  nameEn        String   @map("name_en")
+  nameAr        String   @map("name_ar")
+  specialization String[]
+  contactPerson String?  @map("contact_person")
+  phone         String
+  email         String?
+  address       String?  @db.Text
+  city          String?
+  latitude      Float?
+  longitude     Float?
+  rating        Decimal? @db.Decimal(3, 2)
+  completedJobs Int      @default(0) @map("completed_jobs")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  workshopJobs WorkshopJob[]
+
+  @@index([isActive])
+  @@index([city])
+  @@index([rating])
+  @@map("workshops")
+}
+
+model WorkshopJob {
+  id                  Int       @id @default(autoincrement())
+  ticketId            Int       @map("ticket_id")
+  workshopId          Int       @map("workshop_id")
+  description         String    @db.Text
+  estimatedCost       Decimal?  @map("estimated_cost") @db.Decimal(10, 2)
+  actualCost          Decimal?  @map("actual_cost") @db.Decimal(10, 2)
+  estimatedDuration   Int?      @map("estimated_duration") // in hours
+  status              String    @default("pending") // pending, in_progress, completed, cancelled
+  sentAt              DateTime  @default(now()) @map("sent_at")
+  receivedAt          DateTime? @map("received_at")
+  completedAt         DateTime? @map("completed_at")
+  notes               String?   @db.Text
+  technicianNotes     String?   @map("technician_notes") @db.Text
+  workshopNotes       String?   @map("workshop_notes") @db.Text
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  workshop Workshop @relation(fields: [workshopId], references: [id])
+
+  @@index([ticketId])
+  @@index([workshopId])
+  @@index([status])
+  @@index([sentAt])
+  @@map("workshop_jobs")
+}
+
+// ============================================
+// KPI SNAPSHOTS (Performance Metrics)
+// ============================================
+
+model KpiSnapshot {
+  id                    Int      @id @default(autoincrement())
+  snapshotDate          DateTime @map("snapshot_date")
+  snapshotType          String   @map("snapshot_type") // daily, weekly, monthly
+
+  // Ticket Metrics
+  totalTickets          Int      @default(0) @map("total_tickets")
+  newTickets            Int      @default(0) @map("new_tickets")
+  assignedTickets       Int      @default(0) @map("assigned_tickets")
+  completedTickets      Int      @default(0) @map("completed_tickets")
+  cancelledTickets      Int      @default(0) @map("cancelled_tickets")
+
+  // Performance Metrics
+  avgResponseTime       Int?     @map("avg_response_time") // minutes
+  avgCompletionTime     Int?     @map("avg_completion_time") // minutes
+  firstTimeFixRate      Decimal? @map("first_time_fix_rate") @db.Decimal(5, 2)
+  customerSatisfaction  Decimal? @map("customer_satisfaction") @db.Decimal(3, 2)
+
+  // Technician Metrics
+  activeTechnicians     Int      @default(0) @map("active_technicians")
+  avgTicketsPerTech     Decimal? @map("avg_tickets_per_tech") @db.Decimal(10, 2)
+
+  // Financial Metrics
+  totalRevenue          Decimal? @map("total_revenue") @db.Decimal(12, 2)
+  totalCosts            Decimal? @map("total_costs") @db.Decimal(12, 2)
+
+  // Additional Data (JSON)
+  metadata              Json?
+
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  @@unique([snapshotDate, snapshotType])
+  @@index([snapshotDate])
+  @@index([snapshotType])
+  @@map("kpi_snapshots")
 }
