@@ -93,50 +93,50 @@ class ApiClient {
     return data.data || data;
   }
 
-  // Tasks endpoints
+  // Tickets endpoints (updated from tasks to tickets)
   async getTasks(params?: Record<string, any>) {
-    const { data } = await this.client.get('/tasks', { params });
+    const { data } = await this.client.get('/tickets', { params });
     return data.data || data;
   }
 
   async getTask(id: number) {
-    const { data } = await this.client.get(`/tasks/${id}`);
+    const { data } = await this.client.get(`/tickets/${id}`);
     return data.data || data;
   }
 
   async createTask(taskData: any) {
-    const { data } = await this.client.post('/tasks', taskData);
+    const { data } = await this.client.post('/tickets', taskData);
     return data.data || data;
   }
 
   async updateTask(id: number, taskData: any) {
-    const { data } = await this.client.patch(`/tasks/${id}`, taskData);
+    const { data } = await this.client.patch(`/tickets/${id}`, taskData);
     return data.data || data;
   }
 
   async transitionTask(id: number, transition: any) {
-    const { data } = await this.client.post(`/tasks/${id}/transition`, transition);
+    const { data } = await this.client.post(`/tickets/${id}/transition`, transition);
     return data.data || data;
   }
 
   async assignTechnician(id: number, assignment: any) {
-    const { data } = await this.client.post(`/tasks/${id}/assign`, assignment);
+    const { data } = await this.client.post(`/tickets/${id}/assign`, assignment);
     return data.data || data;
   }
 
   async sendVerificationCode(id: number) {
-    const { data } = await this.client.post(`/tasks/${id}/verification-code`);
+    const { data } = await this.client.post(`/tickets/${id}/verification-code`);
     return data.data || data;
   }
 
   async getTaskByTrackingToken(token: string) {
-    const { data } = await this.client.get(`/tasks/track/${token}`);
+    const { data } = await this.client.get(`/tickets/track/${token}`);
     return data.data || data;
   }
 
   // Dashboard
   async getDashboardStats() {
-    const { data } = await this.client.get('/tasks/stats');
+    const { data } = await this.client.get('/tickets/stats');
     return data.data || data;
   }
 
@@ -159,6 +159,106 @@ class ApiClient {
 
   async getTechnicianLocations() {
     const { data } = await this.client.get('/tracking/technicians');
+    return data.data || data;
+  }
+
+  // Spare Parts endpoints
+  async getSpareParts(params?: Record<string, any>) {
+    const { data } = await this.client.get('/spare-parts', { params });
+    return data.data || data;
+  }
+
+  async getSparePart(id: number) {
+    const { data } = await this.client.get(`/spare-parts/${id}`);
+    return data.data || data;
+  }
+
+  async createSparePart(sparePartData: any) {
+    const { data } = await this.client.post('/spare-parts', sparePartData);
+    return data.data || data;
+  }
+
+  async updateSparePart(id: number, sparePartData: any) {
+    const { data } = await this.client.patch(`/spare-parts/${id}`, sparePartData);
+    return data.data || data;
+  }
+
+  async updateSparePartStock(id: number, quantity: number, operation: 'add' | 'subtract') {
+    const { data } = await this.client.post(`/spare-parts/${id}/stock`, { quantity, operation });
+    return data.data || data;
+  }
+
+  async getLowStockItems() {
+    const { data } = await this.client.get('/spare-parts/low-stock');
+    return data.data || data;
+  }
+
+  async getInventoryValue() {
+    const { data } = await this.client.get('/spare-parts/inventory-value');
+    return data.data || data;
+  }
+
+  // Workshops endpoints
+  async getWorkshops(params?: Record<string, any>) {
+    const { data } = await this.client.get('/workshops', { params });
+    return data.data || data;
+  }
+
+  async getWorkshop(id: number) {
+    const { data } = await this.client.get(`/workshops/${id}`);
+    return data.data || data;
+  }
+
+  async createWorkshop(workshopData: any) {
+    const { data } = await this.client.post('/workshops', workshopData);
+    return data.data || data;
+  }
+
+  async updateWorkshop(id: number, workshopData: any) {
+    const { data } = await this.client.patch(`/workshops/${id}`, workshopData);
+    return data.data || data;
+  }
+
+  async createWorkshopJob(jobData: any) {
+    const { data } = await this.client.post('/workshops/jobs', jobData);
+    return data.data || data;
+  }
+
+  async updateWorkshopJob(id: number, jobData: any) {
+    const { data } = await this.client.patch(`/workshops/jobs/${id}`, jobData);
+    return data.data || data;
+  }
+
+  async getWorkshopJobs(ticketId: number) {
+    const { data } = await this.client.get(`/workshops/jobs/ticket/${ticketId}`);
+    return data.data || data;
+  }
+
+  async getWorkshopStats(workshopId: number) {
+    const { data } = await this.client.get(`/workshops/${workshopId}/stats`);
+    return data.data || data;
+  }
+
+  // KPI endpoints
+  async getKpiSnapshots(params?: Record<string, any>) {
+    const { data } = await this.client.get('/kpi/snapshots', { params });
+    return data.data || data;
+  }
+
+  async generateKpiSnapshot(type: 'daily' | 'weekly' | 'monthly') {
+    const { data } = await this.client.post('/kpi/generate', { type });
+    return data.data || data;
+  }
+
+  // Categories endpoints
+  async getCategories() {
+    const { data } = await this.client.get('/categories');
+    return data.data || data;
+  }
+
+  // Suppliers endpoints
+  async getSuppliers(params?: Record<string, any>) {
+    const { data } = await this.client.get('/suppliers', { params });
     return data.data || data;
   }
 }

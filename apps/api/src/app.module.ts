@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { BullModule } from '@nestjs/bullmq';
+import { ScheduleModule } from '@nestjs/schedule';
 
 // Core modules
 import { PrismaModule } from './prisma/prisma.module';
@@ -11,6 +12,9 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { TicketsModule } from './modules/tickets/tickets.module';
 import { SmsModule } from './modules/sms/sms.module';
+import { SparePartsModule } from './modules/spare-parts/spare-parts.module';
+import { WorkshopsModule } from './modules/workshops/workshops.module';
+import { KpiModule } from './modules/kpi/kpi.module';
 
 @Module({
   imports: [
@@ -20,6 +24,9 @@ import { SmsModule } from './modules/sms/sms.module';
       envFilePath: ['.env.local', '.env'],
       cache: true,
     }),
+
+    // Scheduled Tasks (Cron Jobs)
+    ScheduleModule.forRoot(),
 
     // Rate Limiting
     ThrottlerModule.forRootAsync({
@@ -75,6 +82,9 @@ import { SmsModule } from './modules/sms/sms.module';
     UsersModule,
     TicketsModule,
     SmsModule,
+    SparePartsModule,
+    WorkshopsModule,
+    KpiModule,
   ],
 })
 export class AppModule {}

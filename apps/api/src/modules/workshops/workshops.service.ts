@@ -213,8 +213,9 @@ export class WorkshopsService {
 
     // Calculate average rating from completed jobs
     // This is a simplified version - you might want to add actual rating system
+    const totalJobs = await this.prisma.workshopJob.count({ where: { workshopId } });
     const completionRate = workshop.completedJobs > 0
-      ? (workshop.completedJobs / (workshop._count?.workshopJobs || 1)) * 5
+      ? (workshop.completedJobs / (totalJobs || 1)) * 5
       : 0;
 
     await this.prisma.workshop.update({
